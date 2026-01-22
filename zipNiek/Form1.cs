@@ -21,53 +21,22 @@ namespace zipNiek
 
         private void btnZip_Click(object sender, EventArgs e)
         {
-            byte[] blist = s.getBytes();
-            uint[] freq = s.getFreq(blist);
+            byte[] barr = s.getBytes();
+            uint[] freq = s.getFreq(barr);
 
-            DLL myL = new DLL();
-
-            for (int i = 0; i < freq.Length; i++)
-            {
-                if (freq[i] != 0)
-                {
-                    byte b = (byte)i;
-                    node n = new node(b, freq[i]);
-                    myL.insertNode(n);
-                }
-            }
+            DLL myL = s.fillDll(freq);
 
             myL.combineNodes();
             myL.getPaths("", myL.T);
 
-            string bytestring = s.savePaths(blist, myL.paths);
-            byte[] blist2 = s.bitToByte(bytestring);
+            byte[] pathArr = s.savePaths(barr, myL.paths);
 
             string treestring = s.translateTree(myL.T);
             byte[] treeBytes = s.bitToByteTree(treestring);
 
-            byte[] combinedBytes = new byte[treeBytes.Length + blist2.Length];
+            byte[] combinedBytes = s.combineBytes(treeBytes, pathArr);
 
-            for (int i = 0; i < treeBytes.Length; i++)
-            {
-                combinedBytes[i] = treeBytes[i];
-            }
-
-            int j = 0;
-
-            for (int i = treeBytes.Length; i < blist2.Length + treeBytes.Length ; i++)
-            {
-                combinedBytes[i] = blist2[j];
-                j++;
-            }
-
-            string basePath = AppContext.BaseDirectory;
-            string filesDir = Path.Combine(basePath, "files");
-
-            Directory.CreateDirectory(filesDir);
-
-            string filePath = Path.Combine(filesDir, "output.nzip");
-
-            File.WriteAllBytes(filePath, combinedBytes);
+            s.saveZipFile(combinedBytes);
         }
 
         private void btnUnzip_Click(object sender, EventArgs e)
@@ -76,6 +45,7 @@ namespace zipNiek
             string bstring = s.translateTreeBytes(blist);
            
             treeNode t = s.generateTree(bstring);
+
             byte[] encdata = new byte[blist.Length - s.pos / 8];
 
             for (int i = 0; i < encdata.Length; i++)
@@ -83,16 +53,9 @@ namespace zipNiek
                 encdata[i] = blist[i + s.pos / 8];
             }
 
-            string endstring = s.getBits(encdata);
-            endstring = s.translateBits(endstring, t);
+            byte[] endbytes = s.getBits(encdata, t);
 
-            string basePath = AppContext.BaseDirectory;
-            string filesDir = Path.Combine(basePath, "files");
-
-            Directory.CreateDirectory(filesDir);
-
-            string filePath = Path.Combine(filesDir, "unzipped.txt");
-            File.WriteAllText(filePath, endstring);
+            s.saveFile(endbytes);
         }
     }
 }

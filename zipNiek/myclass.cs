@@ -49,15 +49,21 @@ namespace zipNiek
         }
 
         /// <summary>
-        /// Save paths to nodes in a bytearray
+        /// Save the paths to leaves in a bytearray
         /// </summary>
         /// <algo>
-        /// check for each byte found if it exists in the tuple list
-        /// if so add the string in the tuple to the result string
+        /// check each byte in arr what the bytevalue is
+        /// check if that bytevalue exists in the table
+        /// if so write each character as a byte in the pathstring from the table to a byte array
+        /// 
+        /// remove all excess space from the byte[]
+        /// 
+        /// convert bits into bytes
         /// </algo>
-        internal static string savePaths(byte[] arr, List<Tuple<byte, string>> l)
+        internal static byte[] savePaths(byte[] arr, List<Tuple<byte, string>> l)
         {
-            string res = "";
+            byte[] temp = new byte[8 * arr.Length];
+            int i = 0;
 
             foreach (byte b in arr)
             {
@@ -65,59 +71,51 @@ namespace zipNiek
                 {
                     if (t.Item1 == b)
                     {
-                        res += t.Item2;
+                        string s = t.Item2;
+                        foreach (char c in s)
+                        {
+                            temp[i] = (byte)(c-'0');
+                            i++;
+                        }
                     }
                 }
             }
 
-            return res;
-        }
+            int m = (8 - (i % 8)) % 8;
+            byte[] temp2 = new byte[i + m];
 
-        /// <summary>
-        /// Translate textbits into bytes
-        /// </summary>
-        /// <algo>
-        /// Check if s can be divided by 8
-        /// if not add remaining zero's
-        /// 
-        /// Substring s in parts of 8 characters
-        /// translate characters into byte
-        /// put result byte into res[]
-        /// 
-        /// add last byte with the value of the added zero's
-        /// </algo>
-        internal static byte[] bitToByte(string s)
-        {
-            int m = 0;
-            if (s.Length % 8 != 0)
+            for (int j = 0; j < i; j++)
             {
-                m = 8 - (s.Length % 8);
-                for (int k = 0; k < m; k++)
-                {
-                    s += "0";
-                }
+                temp2[j] = temp[j];
             }
 
-            byte[] res = new byte[s.Length / 8 + 1];
-
-            int j = 0;
-
-            for (int i = 0; i < s.Length; i += 8)
+            for (int j = i; j < i + m; j++)
             {
-                int w = 128;
-                int r = 0;
-                string t = s.Substring(i, 8);
-                foreach (char c in t)
-                {
-                    if (c == '1') r += w;
-                    w /= 2;
-                }
-                res[j] = (byte)r;
-                j++;
+                temp2[j] = 0;
             }
 
-            res[res.Length - 1] = (byte)m;
-            return res;
+            byte[] output = new byte[(temp2.Length / 8) + 1];
+
+            int k = 0;
+
+            for (int n = 0; n < temp2.Length; n += 8)
+            {
+                int value = 0;
+                int weight = 128;
+
+                for (int x = 0; x < 8; x++)
+                {
+                    if (temp2[n + x] == 1) value += weight;
+                    weight /= 2;
+                }
+
+                output[k] = (byte)value;
+                k++;
+            }
+
+            output[output.Length - 1] = (byte)m;
+
+            return output;
         }
 
         /// <summary>
@@ -172,11 +170,8 @@ namespace zipNiek
         /// Start at the top of the tree (tail)
         /// walk down the tree, always first left then right
         /// 
-        /// if you hit a leaf -> safe relevant data
-        /// else repeat
-        /// 
-        /// check if res is dividable by 8,
-        /// if not add zero's
+        /// if you hit a leaf, save relevant data
+        /// if you hit a non-leaf, recurse to left and right
         /// </algo>
         internal static string translateTree(node n)
         {
@@ -201,7 +196,7 @@ namespace zipNiek
         /// Translate treebytes into bits
         /// </summary>
         /// <algo>
-        /// for each byte in the bytearray, translate it into a binary value
+        /// for each byte in the bytearray, translate it into bitcode
         /// return the translated string
         /// </algo>
         internal static string translateTreeBytes(byte[] blist)
@@ -253,14 +248,10 @@ namespace zipNiek
         /// generate tree using bitstring
         /// </summary>
         /// <algo>
-        /// loop through characters of string
-        /// if 0 make a new treeNode with bytevalue x
-        /// if 1 consume next 8 and convert to byte
-        /// create a new node and add to the tree
-        /// 
-        /// recurse untill all nodes are made
+        /// Make the first node
+        /// recurse down, starting from top node down using s
         /// </algo>
-        internal static treeNode generateTree( string s)
+        internal static treeNode generateTree(string s)
         {
             pos = 0;
 
@@ -280,6 +271,8 @@ namespace zipNiek
         /// 
         /// if its a 1, consume next 8 bits and translate into byte
         /// if its a 0, recurse to the left, then to the right
+        /// 
+        /// return first treenode
         /// </algo>
         private static treeNode recGenerate(string s)
         {
@@ -298,27 +291,40 @@ namespace zipNiek
         }
 
         /// <summary>
-        /// translate bits into text using binary tree
+        /// translate bytes into bits
         /// </summary>
         /// <algo>
-        /// Walk trough the tree using s and the start of the tree n
+        /// get the amount of bits added, this is the bytevalue of the last byte in the array
+        /// make a big enough array
+        /// fill the array with the bitcode of each byte
+        /// recurse through the tree to find leaves, put bitcode of found byte in array
         /// 
-        /// for each character in the string check if its a 1 or 0
-        /// if its a 1 go left, if its a 0 go right
-        /// 
-        /// check if found node is a leaf
-        /// if so, convert found bytevalue to character and add to string
-        /// 
-        /// return the string
+        /// get rid of excess empty fields in array
         /// </algo>
-        internal static string translateBits(string s, treeNode n)
+        internal static byte[] getBits(byte[] arr, treeNode n)
         {
-            string res = "";
-            treeNode start = n;
+            byte[] temp = new byte[arr.Length * 8];
+            int m = arr[arr.Length - 1];
+            int j = 0;
 
-            for (int i = 0; i < s.Length; i++)
+            for (int i = 0; i < arr.Length - 1; i++)
             {
-                if (s[i] == '1')
+                string tmp = getBitcode(arr[i]);
+
+                foreach (char c in tmp)
+                {
+                    temp[j++] = (byte)(c - '0');
+                }
+            }
+
+            treeNode start = n;
+            byte[] temp2 = new byte[temp.Length];
+            int oi = 0;
+            int bitAmt = ((arr.Length - 1) * 8) - m;
+
+            for (int i = 0; i < bitAmt; i++)
+            {
+                if (temp[i] == 1)
                 {
                     n = n.L;
                 }
@@ -329,34 +335,108 @@ namespace zipNiek
 
                 if (n.L == null && n.R == null)
                 {
-                    res += (char)n.b;
+                    temp2[oi++] = n.b;
                     n = start;
                 }
             }
+
+            byte[] res = new byte[oi];
+            Array.Copy(temp2, res, oi);
+
             return res;
         }
 
         /// <summary>
-        /// translate bytes into bits
+        /// Fill a DLL with nodes consisting of bytes in freq[]
         /// </summary>
         /// <algo>
-        /// get the amount of bits added, this is the bytevalue of the last byte in the array
-        /// 
-        /// translate every byte in the byte[] into characters and add them to a string excluding the last byte
-        /// return the completed string excluding the added bits to make a full byte
+        /// for each frequency found make a node
+        /// add frequency value to the node & byte value
+        /// store the node in the DLL
         /// </algo>
-        internal static string getBits(byte[] blist)
+        internal static DLL fillDll(uint[] freq)
         {
-            int m = blist[blist.Length - 1];
-
-            string res = "";
-
-            for (int i = 0; i < blist.Length - 1; i++)
+            DLL myL = new DLL();
+            for (int i = 0; i < freq.Length; i++)
             {
-                res += getBitcode(blist[i]);
+                if (freq[i] != 0)
+                {
+                    byte b = (byte)i;
+                    node n = new node(b, freq[i]);
+                    myL.insertNode(n);
+                }
             }
 
-            return res.Substring(0, res.Length-m);
+            return myL;
+        }
+
+        /// <summary>
+        /// Combine 2 byte[] into one
+        /// </summary>
+        /// <algo>
+        /// create a new array with the lenght of the 2 lists
+        /// add each byte to the combinedArray
+        /// </algo>
+        internal static byte[] combineBytes(byte[] treeBytes, byte[] blist2)
+        {
+            byte[] cArr = new byte[treeBytes.Length + blist2.Length];
+
+            for (int i = 0; i < treeBytes.Length; i++)
+            {
+                cArr[i] = treeBytes[i];
+            }
+
+            int j = 0;
+
+            for (int i = treeBytes.Length; i < blist2.Length + treeBytes.Length; i++)
+            {
+                cArr[i] = blist2[j];
+                j++;
+            }
+
+            return cArr;
+        }
+
+        /// <summary>
+        /// Saves a file to a specified place
+        /// </summary>
+        /// <algo>
+        /// Select a directory where to save the file
+        /// Write bytes in arr to file
+        /// </algo>
+        internal static void saveZipFile(byte[] arr)
+        {
+            FolderBrowserDialog fbd = new FolderBrowserDialog();
+
+            if (fbd.ShowDialog() == DialogResult.OK)
+            {
+                string filesDir = fbd.SelectedPath;
+
+                string filePath = Path.Combine(filesDir, "output.nzip");
+
+                File.WriteAllBytes(filePath, arr);
+            }
+        }
+
+        /// <summary>
+        /// Saves a file to a specified place
+        /// </summary>
+        /// <algo>
+        /// Select a directory where to save the file
+        /// Write bytes in arr to file
+        /// </algo>
+        internal static void saveFile(byte[] arr)
+        {
+            FolderBrowserDialog fbd = new FolderBrowserDialog();
+
+            if (fbd.ShowDialog() == DialogResult.OK)
+            {
+                string filesDir = fbd.SelectedPath;
+
+                string filePath = Path.Combine(filesDir, "unzipped");
+
+                File.WriteAllBytes(filePath, arr);
+            }
         }
     }
 
@@ -453,21 +533,17 @@ namespace zipNiek
         {
             node current = H;
 
-            char c = 'x';
-
             while (current.N != null)
             {
                 uint newF = current.f + current.N.f;
 
-                byte b = (byte)c;
+                byte b = 0;
                 node n = new node(b, newF);
                 n.L = current;
                 n.R = current.N;
                 insertNode(n);
 
                 current = current.N.N;
-
-                c++;
             }
         }
 
@@ -476,9 +552,9 @@ namespace zipNiek
         /// </summary>
         /// <algo>
         /// Check if theres a left or right
-        /// if not add path to list
+        /// if there is no left and right add path to list
+        /// if there is a left and right, recurse with the found node
         /// 
-        /// if so go into the function again with the found node
         /// for left add 1 to the string
         /// for right add 0 to the string
         /// </algo>
